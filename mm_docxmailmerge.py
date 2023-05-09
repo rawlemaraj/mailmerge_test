@@ -26,8 +26,8 @@ def mail_merge(template_path, record, output_file):
         document.write(output_file)
 
 # Configuration
-excel_file = 'data.xlsx'
-word_template = 'mail_merge_template.dotx'
+excel_file = 'data.xlsx' # define patch to file 
+word_template = 'mail_merge_template.dotx' # define path to file
 
 # Load data from Excel
 data = load_excel_data(excel_file)

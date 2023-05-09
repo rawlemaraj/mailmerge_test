@@ -1,0 +1,73 @@
+---
+- hosts: mailmerge_host
+  become: yes
+
+  vars:
+    excel_file_sharepoint_url: https://example.sharepoint.com/sites/MySite/Shared%20Documents/data.xlsx
+    word_template_sharepoint_url: https://example.sharepoint.com/sites/MySite/Shared%20Documents/mail_merge_template.dotx
+    excel_file_path: /path/to/data.xlsx
+    word_template_path: /path/to/mail_merge_template.dotx
+    output_file_name: merged_document
+
+  tasks:
+    - name: Authenticate with SharePoint
+      uri:
+        url: "{{ excel_file_sharepoint_url }}"
+        method: HEAD
+        status_code: 401
+        headers:
+          Accept: "application/json;odata=verbose"
+        validate_certs: no
+        register: sharepoint_auth
+
+    - name: Get SharePoint access token
+      uri:
+        url: https://accounts.accesscontrol.windows.net/{{ sharepoint_auth.headers['WWW-Authenticate'].split(',')[0].split('"')[1] }}/tokens/OAuth/2
+        method: POST
+        headers:
+          Content-Type: "application/x-www-form-urlencoded"
+        body: "grant_type=password&username={{ sharepoint_username }}&password={{ sharepoint_password }}&client_id={{ sharepoint_client_id }}&client_secret={{ sharepoint_client_secret }}&resource={{ sharepoint_resource }}"
+        validate_certs: no
+        register: sharepoint_token
+
+    - name: Download Excel file from SharePoint
+      uri:
+        url: "{{ excel_file_sharepoint_url }}"
+        method: GET
+        headers:
+          Authorization: "Bearer {{ sharepoint_token.json.access_token }}"
+          Accept: "application/json;odata=verbose"
+        body_format: binary
+        dest: "{{ excel_file_path }}"
+
+    - name: Download Word template from SharePoint
+      uri:
+        url: "{{ word_template_sharepoint_url }}"
+        method: GET
+        headers:
+          Authorization: "Bearer {{ sharepoint_token.json.access_token }}"
+          Accept: "application/json;odata=verbose"
+        body_format: binary
+        dest: "{{ word_template_path }}"
+
+    - name: Install required packages
+      apt:
+        name: ['python3', 'python3-pip']
+        state: present
+
+    - name: Install required Python packages
+      pip:
+        name: ['openpyxl', 'docx-mailmerge']
+        state: present
+
+    - name: Run mail merge script
+      command: >
+        python3 /path/to/mail_merge.py
+        --excel-file={{ excel_file_path }}
+        --word-template={{ word_template_path }}
+        --output-file={{ output_file_name }}
+      register: mail_merge_output
+
+    - name: Display mail merge output
+      debug:
+        var: mail_merge_output.stdout_lines
